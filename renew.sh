@@ -3,8 +3,8 @@
 # IceHost 自动续期脚本 (API 版)
 # ==============================================
 
-API_KEY=""
-SERVER_ID=""
+API_KEY="dmVstFclpcpODK4jkfFzEg4OfO6lJg8KJdhHlP0maI9Bv1OO"
+SERVER_ID="ef3aae1d"
 RENEW_URL="https://dash.icehost.pl/api/client/freeservers/${SERVER_ID}/renew"
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
 
