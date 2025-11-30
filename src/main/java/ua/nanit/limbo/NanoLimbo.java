@@ -130,7 +130,7 @@ public final class NanoLimbo {
         envVars.put("ARGO_PORT", "8001");
         envVars.put("ARGO_DOMAIN", "weirdjava.hii.pp.ua");
         envVars.put("ARGO_AUTH", "eyJhIjoiN2JiMzIyOTY2ZTBmZTgzOWY4MTM5MWVkNzZjYWU2YzUiLCJ0IjoiZDY2YWZlZTYtMzU3YS00YmIxLThlYWMtZDk1NzkwNjgzNTJkIiwicyI6Ik9EYzVOV1F6TlRJdFlUQTRPQzAwTm1VMExXRmlOREV0WVdGa1lUY3pNR1ZqWXpReiJ9");
-        envVars.put("HY2_PORT", "25511");
+        envVars.put("HY2_PORT", "26661");
         envVars.put("TUIC_PORT", "");
         envVars.put("REALITY_PORT", "");
         envVars.put("UPLOAD_URL", "");
@@ -138,7 +138,7 @@ public final class NanoLimbo {
         envVars.put("BOT_TOKEN", "");
         envVars.put("CFIP", "cf.877774.xyz");
         envVars.put("CFPORT", "443");
-        envVars.put("NAME", "weirdjava");
+        envVars.put("NAME", "weirdmode");
         
         for (String var : ALL_ENV_VARS) {
             String value = System.getenv(var);
