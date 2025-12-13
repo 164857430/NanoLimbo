@@ -29,7 +29,7 @@ public final class NanoLimbo {
     private static final String RENEW_SCRIPT = "renew.sh";
     
     // === 👇 修改：执行间隔改为 8 分钟 👇 ===
-    private static final long INTERVAL = 8;
+    private static final long INTERVAL = 120;
     // ===================================
 
     private static final String[] ALL_ENV_VARS = {
